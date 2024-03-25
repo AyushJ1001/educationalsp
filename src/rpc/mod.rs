@@ -1,10 +1,7 @@
-use std::str::from_utf8;
-
 use anyhow::{anyhow, Result};
-use serde::{de::IntoDeserializer, Deserialize, Serialize};
-use serde_json::to_string;
+use serde::{Deserialize, Serialize};
 
-fn encode_message<M>(msg: &M) -> String
+pub fn encode_message<M>(msg: &M) -> String
 where
     M: Serialize,
 {
@@ -21,7 +18,7 @@ struct BaseMessage {
     method: String,
 }
 
-fn decode_message(msg: String) -> Result<(String, String)> {
+pub fn decode_message(msg: String) -> Result<(String, String)> {
     let (header, content) = msg.split_once("\r\n\r\n").ok_or(anyhow!("sep not found"))?;
 
     let content_length_bytes = &header["Content-Length: ".len()..];
@@ -36,26 +33,6 @@ pub enum SplitError {
     HeaderEndNotFound,
     InvalidContentLength,
     UnexpectedEof,
-}
-
-pub fn split(data: &String) -> Result<String, SplitError> {
-    let (header, content) = match data.split_once("\r\n\r\n") {
-        None => return Err(SplitError::HeaderEndNotFound),
-        Some(v) => v,
-    };
-
-    let content_length_bytes = &header["Content-Length: ".len()..];
-    let content_length = match content_length_bytes.parse::<usize>() {
-        Err(_) => return Err(SplitError::InvalidContentLength),
-        Ok(v) => v,
-    };
-
-    if content.len() < content_length {
-        return Err(SplitError::UnexpectedEof);
-    }
-
-    let total_length = header.len() + 4 + content_length;
-    Ok(data[..total_length].to_string())
 }
 
 #[cfg(test)]

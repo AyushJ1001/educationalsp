@@ -3,6 +3,7 @@ use std::io::{self, BufRead, Read};
 use anyhow::{anyhow, Result};
 use simple_log::{info, LogConfigBuilder};
 
+pub mod lsp;
 pub mod rpc;
 
 fn main() -> Result<()> {
@@ -49,11 +50,42 @@ fn main() -> Result<()> {
 
         io::stdin().lock().read_exact(&mut content_buf)?;
 
-        header_buf.pop();
-        content_buf.drain(..3);
-        info!("Header: {:?}", std::str::from_utf8(&header_buf)?);
-        info!("Content: {:?}", std::str::from_utf8(&content_buf)?);
-        info!("Content-Length: {}", content_buf.len());
+        header_buf.append(&mut content_buf);
+
+        let msg = std::str::from_utf8(&header_buf)?;
+
+        let (method, contents) = match rpc::decode_message(msg.to_string()) {
+            Err(e) => {
+                info!("Got an error: {}", e);
+                continue;
+            }
+            Ok(v) => v,
+        };
+
+        handle_message(method, contents);
+    }
+}
+
+fn handle_message(method: String, contents: String) {
+    info!("Received msg with method: {}", method);
+
+    match method.as_str() {
+        "initialize" => {
+            let request =
+                match serde_json::from_str::<lsp::initialize::InitializeRequest>(contents.as_str())
+                {
+                    Err(e) => {
+                        info!("Hey, we couldn't parse this: {}", e);
+                        return;
+                    }
+                    Ok(v) => v,
+                };
+
+            if let Some(client_info) = request.params.client_info {
+                info!("Connected to: {} {}", client_info.name, client_info.version);
+            }
+        }
+        _ => (),
     }
 }
 
